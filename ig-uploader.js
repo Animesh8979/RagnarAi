@@ -1,0 +1,356 @@
+require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const fetch = require('node-fetch');
+const {canAttempt, getCircuitState, recordCircuitFailure, recordCircuitSuccess} = require('./circuit-breaker');
+const {enqueueRecoveryItem} = require('./recovery-queue');
+
+const API_VERSION = process.env.INSTAGRAM_API_VERSION || 'v24.0';
+const GRAPH_BASE = process.env.INSTAGRAM_GRAPH_BASE || 'https://graph.facebook.com';
+const DEFAULT_POLL_MS = Math.max(5000, Number(process.env.INSTAGRAM_STATUS_POLL_MS || 10000));
+const DEFAULT_TIMEOUT_MS = Math.max(60000, Number(process.env.INSTAGRAM_STATUS_TIMEOUT_MS || 20 * 60 * 1000));
+const DEFAULT_RETRY_ATTEMPTS = Math.max(1, Number(process.env.INSTAGRAM_RETRY_ATTEMPTS || 3));
+const DEFAULT_RETRY_BACKOFF_MS = Math.max(2000, Number(process.env.INSTAGRAM_RETRY_BACKOFF_MS || 15000));
+const INSTAGRAM_CIRCUIT_KEY = 'instagram:publish';
+const INSTAGRAM_CIRCUIT_THRESHOLD = Math.max(1, Number(process.env.INSTAGRAM_CIRCUIT_THRESHOLD || 3));
+const INSTAGRAM_CIRCUIT_COOLDOWN_MS = Math.max(30000, Number(process.env.INSTAGRAM_CIRCUIT_COOLDOWN_MS || 30 * 60 * 1000));
+
+function getAccessToken() {
+  return process.env.INSTAGRAM_ACCESS_TOKEN || '';
+}
+
+function getInstagramUserId() {
+  return process.env.INSTAGRAM_USER_ID || '';
+}
+
+function isInstagramConfigured() {
+  return Boolean(getAccessToken() && getInstagramUserId());
+}
+
+function ensureConfigured() {
+  if (!getAccessToken()) throw new Error('INSTAGRAM_ACCESS_TOKEN is missing.');
+  if (!getInstagramUserId()) throw new Error('INSTAGRAM_USER_ID is missing.');
+}
+
+function buildGraphUrl(resourcePath) {
+  return `${GRAPH_BASE.replace(/\/$/, '')}/${API_VERSION}/${String(resourcePath || '').replace(/^\/+/, '')}`;
+}
+
+async function parseJson(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    return { raw: text };
+  }
+}
+
+async function graphRequest(method, resourcePath, params = {}) {
+  const url = buildGraphUrl(resourcePath);
+  const requestParams = { ...params, access_token: getAccessToken() };
+  const options = { method, headers: {} };
+
+  let finalUrl = url;
+  if (method === 'GET') {
+    const qs = new URLSearchParams();
+    for (const [key, value] of Object.entries(requestParams)) {
+      if (value === undefined || value === null || value === '') continue;
+      qs.set(key, String(value));
+    }
+    finalUrl = `${url}?${qs.toString()}`;
+  } else {
+    options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    options.body = new URLSearchParams(
+      Object.entries(requestParams).reduce((acc, [key, value]) => {
+        if (value !== undefined && value !== null && value !== '') acc[key] = String(value);
+        return acc;
+      }, {})
+    ).toString();
+  }
+
+  const response = await fetch(finalUrl, options);
+  const data = await parseJson(response);
+  if (!response.ok) {
+    const message = data && data.error && data.error.message ? data.error.message : JSON.stringify(data);
+    const code = data?.error?.code;
+    
+    // Auto-Rotate Token on OAuth Expiry (190)
+    if (code === 190) {
+      console.warn(`   ⚠️ IG Token Expired! Attempting auto-rotation via fb_exchange_token...`);
+      const appId = process.env.INSTAGRAM_APP_ID;
+      const appSecret = process.env.INSTAGRAM_APP_SECRET;
+      if (appId && appSecret) {
+        try {
+          const rotateUrl = `${GRAPH_BASE.replace(/\/$/, '')}/${API_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${getAccessToken()}`;
+          const rotateRes = await fetch(rotateUrl);
+          const rotateData = await parseJson(rotateRes);
+          if (rotateData.access_token) {
+            console.log(`   🔄 Token rotated successfully! Saving to environment.`);
+            process.env.INSTAGRAM_ACCESS_TOKEN = rotateData.access_token;
+            
+            // Rewrite .env safely
+            const envPath = path.join(process.cwd(), '.env');
+            if (fs.existsSync(envPath)) {
+               let envContent = fs.readFileSync(envPath, 'utf8');
+               envContent = envContent.replace(
+                 /INSTAGRAM_ACCESS_TOKEN=.*/g, 
+                 `INSTAGRAM_ACCESS_TOKEN="${rotateData.access_token}"`
+               );
+               fs.writeFileSync(envPath, envContent);
+            }
+            
+            // Retry the original request with the new token
+            const retryParams = { ...params, access_token: rotateData.access_token };
+            if (method === 'GET') {
+              const r_qs = new URLSearchParams(retryParams);
+              const retryUrl = `${url}?${r_qs.toString()}`;
+              const res2 = await fetch(retryUrl, { method, headers: options.headers });
+              const data2 = await parseJson(res2);
+              if (!res2.ok) throw new Error(`Retry failed: ${data2?.error?.message}`);
+              return data2;
+            } else { // POST
+              const retryOptions = { 
+                method, 
+                headers: options.headers, 
+                body: new URLSearchParams(retryParams).toString() 
+              };
+              const res2 = await fetch(url, retryOptions);
+              const data2 = await parseJson(res2);
+              if (!res2.ok) throw new Error(`Retry failed: ${data2?.error?.message}`);
+              return data2;
+            }
+          }
+        } catch (rotateErr) {
+          console.error(`   ❌ Token rotation failed: ${rotateErr.message}`);
+        }
+      } else {
+        console.warn(`   ❌ Cannot rotate token: INSTAGRAM_APP_ID or SECRETS missing in .env!`);
+      }
+    }
+    
+    throw new Error(`Instagram Graph ${response.status}: ${message}`);
+  }
+  return data;
+}
+
+function buildPublicUrlFromEnv(fileName) {
+  const template = process.env.INSTAGRAM_VIDEO_URL_TEMPLATE || '';
+  if (template) {
+    return template
+      .replace(/\{filename\}/g, encodeURIComponent(fileName))
+      .replace(/\{basename\}/g, encodeURIComponent(path.parse(fileName).name));
+  }
+
+  const baseUrl = process.env.INSTAGRAM_PUBLIC_VIDEO_BASE_URL || '';
+  if (!baseUrl) return '';
+  return `${baseUrl.replace(/\/$/, '')}/${encodeURIComponent(fileName)}`;
+}
+
+async function stageVideoForInstagram(videoPath, options = {}) {
+  if (!fs.existsSync(videoPath)) {
+    throw new Error(`Video file not found: ${videoPath}`);
+  }
+
+  // If user has a manual public URL config, use it
+  const originalName = path.basename(videoPath);
+  const safeName = `${path.parse(originalName).name}-${Date.now()}${path.extname(originalName) || '.mp4'}`
+    .replace(/[^a-zA-Z0-9._-]/g, '-')
+    .replace(/-+/g, '-');
+
+  const outputDir = options.publicOutputDir || process.env.INSTAGRAM_PUBLIC_VIDEO_OUTPUT_DIR || '';
+  if (outputDir) {
+    fs.mkdirSync(outputDir, { recursive: true });
+    fs.copyFileSync(videoPath, path.join(outputDir, safeName));
+  }
+
+  const manualUrl = options.publicVideoUrl || buildPublicUrlFromEnv(safeName || originalName);
+  if (/^https?:\/\//i.test(manualUrl || '')) {
+    return { publicVideoUrl: manualUrl, publicFileName: safeName || originalName };
+  }
+
+  // Auto-upload to free public hosting
+  try {
+    const { uploadToPublicHost } = require('./public-video-host');
+    const result = await uploadToPublicHost(videoPath, { allowSingleUseHosts: false });
+    return { publicVideoUrl: result.url, publicFileName: safeName || originalName, hostProvider: result.provider };
+  } catch (err) {
+    throw new Error(`Instagram needs a public video URL but auto-hosting failed: ${err.message}`);
+  }
+}
+
+function isRetryableInstagramError(error) {
+  const message = String(error && error.message ? error.message : error || '');
+  return /2207076|did not finish within|ETIMEDOUT|ECONNRESET|ECONNREFUSED|network|temporar|rate limit|fetch/i.test(message);
+}
+
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function createReelContainer(caption, publicVideoUrl, options = {}) {
+  const data = await graphRequest('POST', `${getInstagramUserId()}/media`, {
+    media_type: 'REELS',
+    video_url: publicVideoUrl,
+    caption,
+    share_to_feed: options.shareToFeed === false ? 'false' : 'true',
+    thumb_offset: options.thumbOffsetMs,
+  });
+  if (!data || !data.id) {
+    throw new Error('Instagram did not return a valid creation id.');
+  }
+  return data;
+}
+
+async function waitForContainerFinish(containerId, options = {}) {
+  const timeoutMs = Math.max(10000, Number(options.timeoutMs) || DEFAULT_TIMEOUT_MS);
+  const pollMs = Math.max(2000, Number(options.pollMs) || DEFAULT_POLL_MS);
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const status = await graphRequest('GET', containerId, { fields: 'status_code,status' });
+    const code = String(status.status_code || '').toUpperCase();
+    if (code === 'FINISHED') return status;
+    if (code === 'ERROR' || code === 'EXPIRED') {
+      throw new Error(`Instagram container ${containerId} entered ${code}: ${status.status || 'unknown status'}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+
+  throw new Error(`Instagram container ${containerId} did not finish within ${Math.round(timeoutMs / 1000)} seconds.`);
+}
+
+async function publishContainer(containerId) {
+  return graphRequest('POST', `${getInstagramUserId()}/media_publish`, { creation_id: containerId });
+}
+
+async function fetchPublishedMediaInfo(mediaId) {
+  try {
+    return await graphRequest('GET', mediaId, { fields: 'id,permalink,shortcode,media_product_type' });
+  } catch (_) {
+    return null;
+  }
+}
+
+async function testInstagramAuth() {
+  try {
+    ensureConfigured();
+    const profile = await graphRequest('GET', getInstagramUserId(), { fields: 'id,username' });
+    console.log('OK Instagram authentication successful');
+    console.log(`   Account: ${profile.username || profile.id}`);
+    return true;
+  } catch (error) {
+    console.error(`ERROR Instagram authentication failed: ${error.message}`);
+    return false;
+  }
+}
+
+async function uploadToInstagram(videoPath, caption, options = {}) {
+  ensureConfigured();
+  if (!canAttempt(INSTAGRAM_CIRCUIT_KEY)) {
+    const circuit = getCircuitState(INSTAGRAM_CIRCUIT_KEY);
+    const error = `Instagram circuit open for about ${Math.ceil(Math.max(0, circuit.blockedUntilMs - Date.now()) / 1000)}s`;
+    enqueueRecoveryItem({
+      type: 'instagram_upload',
+      key: `instagram:${path.basename(videoPath)}`,
+      label: 'Instagram upload deferred',
+      renderPath: videoPath,
+      error,
+    });
+    return {
+      success: false,
+      error,
+      attempts: 0,
+      platform: 'instagram_reels',
+    };
+  }
+
+  const stat = fs.statSync(videoPath);
+  if (stat.size > 1024 * 1024 * 1024) {
+    throw new Error('Instagram upload aborted: file exceeds 1 GB.');
+  }
+
+  const fileSizeMb = (stat.size / (1024 * 1024)).toFixed(2);
+  console.log('\nIG Instagram Upload Starting...');
+  console.log(`   File: ${path.basename(videoPath)} (${fileSizeMb} MB)`);
+
+  const attempts = Math.max(1, Number(options.retryAttempts) || DEFAULT_RETRY_ATTEMPTS);
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const staged = await stageVideoForInstagram(videoPath, options);
+      console.log(`   Public file: ${staged.publicFileName}`);
+      console.log(`   Public URL: ${staged.publicVideoUrl}`);
+
+      const container = await createReelContainer(caption, staged.publicVideoUrl, options);
+      console.log(`   Container: ${container.id}`);
+
+      await waitForContainerFinish(container.id, options);
+      console.log('   Container ready for publish');
+
+      const published = await publishContainer(container.id);
+      const mediaId = published && published.id ? published.id : null;
+      const mediaInfo = mediaId ? await fetchPublishedMediaInfo(mediaId) : null;
+      const permalink = mediaInfo && mediaInfo.permalink
+        ? mediaInfo.permalink
+        : mediaInfo && mediaInfo.shortcode
+          ? `https://www.instagram.com/reel/${mediaInfo.shortcode}/`
+          : null;
+
+      console.log('   OK Instagram publish successful');
+      if (permalink) console.log(`   URL: ${permalink}`);
+      recordCircuitSuccess(INSTAGRAM_CIRCUIT_KEY);
+
+      return {
+        success: true,
+        attempt,
+        attempts,
+        containerId: container.id,
+        mediaId,
+        permalink,
+        publicVideoUrl: staged.publicVideoUrl,
+        hostProvider: staged.hostProvider || null,
+        platform: 'instagram_reels',
+      };
+    } catch (error) {
+      lastError = error;
+      const circuit = recordCircuitFailure(INSTAGRAM_CIRCUIT_KEY, error, {
+        threshold: INSTAGRAM_CIRCUIT_THRESHOLD,
+        cooldownMs: INSTAGRAM_CIRCUIT_COOLDOWN_MS,
+      });
+      const retryable = isRetryableInstagramError(error);
+      console.error(`   ERROR Instagram upload attempt ${attempt}/${attempts} failed: ${error.message}`);
+      if (circuit.blocked) {
+        console.log('   Instagram circuit opened after repeated failures; deferring further attempts.');
+      }
+      if (!retryable || attempt >= attempts) {
+        break;
+      }
+      const delayMs = DEFAULT_RETRY_BACKOFF_MS * attempt;
+      console.log(`   Retrying Instagram upload in ${Math.round(delayMs / 1000)}s with a fresh public URL...`);
+      await sleep(delayMs);
+    }
+  }
+
+  enqueueRecoveryItem({
+    type: 'instagram_upload',
+    key: `instagram:${path.basename(videoPath)}`,
+    label: 'Instagram upload failed',
+    renderPath: videoPath,
+    error: String(lastError && lastError.message ? lastError.message : lastError || 'Instagram upload failed'),
+  });
+
+  return {
+    success: false,
+    error: String(lastError && lastError.message ? lastError.message : lastError || 'Instagram upload failed'),
+    attempts,
+    platform: 'instagram_reels',
+  };
+}
+
+module.exports = {
+  isInstagramConfigured,
+  testInstagramAuth,
+  uploadToInstagram,
+};

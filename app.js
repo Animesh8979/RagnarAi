@@ -994,7 +994,151 @@ function initParticles() {
     requestAnimationFrame(draw);
   }
   
+  // Mouse interaction - particles attracted to cursor
+  let mouseX = canvas.width / 2, mouseY = canvas.height / 2;
+  canvas.parentElement.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
+    
+    particles.forEach(p => {
+      const dist = Math.hypot(p.x - mouseX, p.y - mouseY);
+      if (dist < 150) {
+        const angle = Math.atan2(p.y - mouseY, p.x - mouseX);
+        p.dx += Math.cos(angle) * 0.03;
+        p.dy += Math.sin(angle) * 0.03;
+      }
+    });
+  });
+  
   draw();
+}
+
+// ============================================
+// CUSTOM CURSOR GLOW
+// ============================================
+function initCursorGlow() {
+  // Don't use custom cursor on touch devices
+  if ('ontouchstart' in window) {
+    document.body.style.cursor = 'auto';
+    return;
+  }
+  
+  const glow = document.createElement('div');
+  glow.className = 'cursor-glow';
+  document.body.appendChild(glow);
+  
+  const dot = document.createElement('div');
+  dot.className = 'cursor-dot';
+  document.body.appendChild(dot);
+  
+  let cx = 0, cy = 0;
+  let tx = 0, ty = 0;
+  
+  document.addEventListener('mousemove', e => {
+    tx = e.clientX;
+    ty = e.clientY;
+  });
+  
+  function animate() {
+    cx += (tx - cx) * 0.15;
+    cy += (ty - cy) * 0.15;
+    
+    glow.style.left = cx + 'px';
+    glow.style.top = cy + 'px';
+    dot.style.left = tx + 'px';
+    dot.style.top = ty + 'px';
+    
+    requestAnimationFrame(animate);
+  }
+  animate();
+  
+  // Hover effects on interactive elements
+  document.querySelectorAll('a, button, .product-card, .quiz-tile, .map-dot, .trust-col').forEach(el => {
+    el.addEventListener('mouseenter', () => dot.classList.add('hover'));
+    el.addEventListener('mouseleave', () => dot.classList.remove('hover'));
+  });
+}
+
+// ============================================
+// 3D CARD TILT ON MOUSE MOVE
+// ============================================
+function initCardTilt() {
+  document.querySelectorAll('.product-card').forEach(card => {
+    card.addEventListener('mousemove', e => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const rotateX = (y - centerY) / centerY * -8;
+      const rotateY = (x - centerX) / centerX * 8;
+      
+      card.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-12px) scale(1.02)`;
+    });
+    
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = 'perspective(800px) rotateX(0) rotateY(0) translateY(0) scale(1)';
+    });
+  });
+}
+
+// ============================================
+// HERO PARALLAX ON MOUSE MOVE
+// ============================================
+function initHeroParallax() {
+  const hero = document.querySelector('.hero-section');
+  const title = document.getElementById('hero-title');
+  const subtitle = document.getElementById('hero-subtitle');
+  const product = document.querySelector('.hero-product-wrapper');
+  const pattern = document.querySelector('.hero-bg-pattern');
+  
+  if (!hero) return;
+  
+  hero.addEventListener('mousemove', e => {
+    const rect = hero.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    
+    if (title) title.style.transform = `translate(${x * 15}px, ${y * 10}px)`;
+    if (subtitle) subtitle.style.transform = `translate(${x * 8}px, ${y * 5}px)`;
+    if (product) product.style.transform = `translate(${x * -20}px, ${y * -15}px)`;
+    if (pattern) pattern.style.transform = `translate(${x * -10}px, ${y * -8}px) scale(1.05)`;
+  });
+  
+  hero.addEventListener('mouseleave', () => {
+    [title, subtitle, product, pattern].forEach(el => {
+      if (el) el.style.transform = '';
+    });
+  });
+}
+
+// ============================================
+// STAGGERED SCROLL REVEAL
+// ============================================
+function initStaggeredReveal() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const children = entry.target.querySelectorAll('.product-card, .trust-col, .quiz-tile, .stat-item');
+        children.forEach((child, i) => {
+          child.style.opacity = '0';
+          child.style.transform = 'translateY(40px) scale(0.95)';
+          child.style.transition = `opacity 0.6s ${i * 0.1}s var(--ease-dramatic), transform 0.6s ${i * 0.1}s var(--ease-dramatic)`;
+          
+          requestAnimationFrame(() => {
+            child.style.opacity = '1';
+            child.style.transform = 'translateY(0) scale(1)';
+          });
+        });
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1 });
+  
+  document.querySelectorAll('.product-grid, .trust-columns, .quiz-tiles, .trust-stats').forEach(el => {
+    observer.observe(el);
+  });
 }
 
 // ============================================
@@ -1039,4 +1183,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initParticles();
   initHamburger();
   initCartDrawer();
+  initCursorGlow();
+  initCardTilt();
+  initHeroParallax();
+  initStaggeredReveal();
 });
+

@@ -375,6 +375,50 @@ function placeOrder() {
   const orderId = 'SR-' + Date.now().toString(36).toUpperCase();
   document.getElementById('order-id-display').textContent = orderId;
   
+  // Collect order data
+  const orderData = {
+    orderId,
+    timestamp: new Date().toISOString(),
+    items: cart.map(item => ({
+      name: PRODUCTS[item.id].name,
+      region: PRODUCTS[item.id].region,
+      price: PRODUCTS[item.id].price
+    })),
+    total: getCartTotal(),
+    customer: {
+      name: document.getElementById('checkout-name').value,
+      phone: document.getElementById('checkout-phone').value,
+      email: document.getElementById('checkout-email').value,
+      address: document.getElementById('checkout-address').value,
+      city: document.getElementById('checkout-city').value,
+      pin: document.getElementById('checkout-pin').value
+    },
+    payment: document.querySelector('input[name="payment"]:checked').value
+  };
+  
+  // Save to localStorage
+  const orders = JSON.parse(localStorage.getItem('sr_orders') || '[]');
+  orders.push(orderData);
+  localStorage.setItem('sr_orders', JSON.stringify(orders));
+  
+  // Submit to Formspree (async, non-blocking)
+  fetch('https://formspree.io/f/xpwzgkqj', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      _subject: `🛒 New Order: ${orderId}`,
+      orderId,
+      items: orderData.items.map(i => `${i.name} (₹${i.price})`).join(', '),
+      total: `₹${orderData.total}`,
+      customerName: orderData.customer.name,
+      email: orderData.customer.email,
+      phone: orderData.customer.phone,
+      address: `${orderData.customer.address}, ${orderData.customer.city} - ${orderData.customer.pin}`,
+      payment: orderData.payment,
+      timestamp: orderData.timestamp
+    })
+  }).catch(() => {}); // Silent fail for demo
+  
   document.querySelector('.checkout-body').style.display = 'none';
   document.getElementById('order-success').style.display = 'block';
   
@@ -383,6 +427,9 @@ function placeOrder() {
   document.getElementById('cart-badge').textContent = '0';
   document.querySelectorAll('.add-to-cart-btn').forEach(btn => btn.classList.remove('added'));
   renderCartDrawer();
+  
+  // Reset form
+  document.getElementById('checkout-form').reset();
 }
 
 // ============================================

@@ -416,15 +416,14 @@
         <span>Admin Dashboard</span>
       </div>
       <nav class="sidebar-nav">
-        <div class="nav-item active"><span class="nav-icon">📊</span> Overview</div>
-        <div class="nav-item" onclick="scrollToSection('orders-section')"><span class="nav-icon">🛒</span> Orders</div>
-        <div class="nav-item" onclick="scrollToSection('products-section')"><span class="nav-icon">📦</span> Products</div>
-        <div class="nav-item" onclick="scrollToSection('analytics-section')"><span class="nav-icon">📈</span> Analytics</div>
+        <div class="nav-item active" onclick="navTo('stats-grid')"><span class="nav-icon">📊</span> Overview</div>
+        <div class="nav-item" onclick="navTo('orders-section')"><span class="nav-icon">🛒</span> Orders</div>
+        <div class="nav-item" onclick="navTo('products-section')"><span class="nav-icon">📦</span> Products</div>
+        <div class="nav-item" onclick="navTo('analytics-section')"><span class="nav-icon">📈</span> Analytics</div>
       </nav>
       <div class="sidebar-footer">
         <a href="index.html">← Back to Website</a>
-        <a href="https://formspree.io/f/xlganjkg" target="_blank">📧 Formspree Dashboard</a>
-        <a href="https://spiceroute.goatcounter.com" target="_blank">📊 GoatCounter</a>
+        <a href="https://formspree.io/forms" target="_blank">📧 Formspree Dashboard</a>
       </div>
     </aside>
 
@@ -483,18 +482,18 @@
       <div class="dashboard-section" id="analytics-section">
         <div class="section-title">External Dashboards</div>
         <div class="external-cards">
-          <a href="https://formspree.io/f/xlganjkg" target="_blank" class="ext-card">
+          <a href="https://formspree.io/forms" target="_blank" class="ext-card">
             <span class="ext-icon">📧</span>
             <div class="ext-info">
-              <h4>Formspree — Email & Orders</h4>
-              <p>View all email submissions and order data sent from the website</p>
+              <h4>Formspree — Email &amp; Orders</h4>
+              <p>Login to view all submissions: emails, orders, quiz results</p>
             </div>
           </a>
-          <a href="https://spiceroute.goatcounter.com" target="_blank" class="ext-card">
-            <span class="ext-icon">📊</span>
+          <a href="https://github.com/Animesh8979/RagnarAi/deployments" target="_blank" class="ext-card">
+            <span class="ext-icon">🚀</span>
             <div class="ext-info">
-              <h4>GoatCounter — Visitor Analytics</h4>
-              <p>Page views, unique visitors, devices, locations, referrers</p>
+              <h4>GitHub Pages — Deployment Status</h4>
+              <p>Check deployment status, build logs, and site health</p>
             </div>
           </a>
           <a href="https://github.com/Animesh8979/RagnarAi/tree/spiceroute-site" target="_blank" class="ext-card">
@@ -521,7 +520,7 @@
             <div>
               <strong style="color: var(--ivory);">📡 Live Data Mode</strong>
               <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Dashboard auto-refreshes every 3 seconds. Orders from this browser appear instantly.</p>
-              <p style="font-size: 0.75rem; color: var(--text-muted);">For orders from other devices, check <a href="https://formspree.io/f/xlganjkg" target="_blank">Formspree Dashboard</a>.</p>
+              <p style="font-size: 0.75rem; color: var(--text-muted);">For orders from other devices, check <a href="https://formspree.io/forms" target="_blank">Formspree Dashboard</a>.</p>
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
               <button onclick="seedDemoData()" style="padding: 8px 16px; background: var(--gold); color: var(--dark); border: none; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">📦 Load Demo Orders</button>
@@ -681,8 +680,13 @@
       }
     }
 
-    function scrollToSection(id) {
-      document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+    function navTo(id) {
+      // Update active nav item
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      // Scroll within main-content
+      const el = document.getElementById(id) || document.querySelector('.stats-grid');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     // Initial render

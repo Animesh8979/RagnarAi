@@ -402,7 +402,7 @@ function placeOrder() {
   localStorage.setItem('sr_orders', JSON.stringify(orders));
   
   // Submit to Formspree (async, non-blocking)
-  fetch('https://formspree.io/f/xpwzgkqj', {
+  fetch('https://formspree.io/f/xlganjkg', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -72,8 +72,8 @@ The recommendation quiz captures email addresses via **Formspree**.
 1. Go to [formspree.io](https://formspree.io) and create a **free account**
 2. Click **+ New Form** → name it "Spice Route Leads"
 3. You'll get a form endpoint like: `https://formspree.io/f/xyzabc123`
-4. Open `index.html` and find line with `action="https://formspree.io/f/xpwzgkqj"`
-5. Replace `xpwzgkqj` with **your form ID**
+4. Open `index.html` and find line with `action="https://formspree.io/f/xlganjkg"`
+5. Replace `xlganjkg` with **your form ID**
 6. Save and redeploy
 
 ### Where to See Submissions:

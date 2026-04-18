@@ -513,99 +513,184 @@
           </a>
         </div>
       </div>
+
+      <!-- Data Info Banner -->
+      <div class="dashboard-section">
+        <div style="background: var(--dark-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <strong style="color: var(--ivory);">📡 Live Data Mode</strong>
+              <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Dashboard auto-refreshes every 3 seconds. Orders from this browser appear instantly.</p>
+              <p style="font-size: 0.75rem; color: var(--text-muted);">For orders from other devices, check <a href="https://formspree.io/f/xlganjkg" target="_blank">Formspree Dashboard</a>.</p>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button onclick="seedDemoData()" style="padding: 8px 16px; background: var(--gold); color: var(--dark); border: none; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">📦 Load Demo Orders</button>
+              <button onclick="clearAllData()" style="padding: 8px 16px; background: transparent; color: var(--red); border: 1px solid var(--red); border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">🗑️ Clear All</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 
   <script>
-    // Time
-    document.getElementById('header-time').textContent = new Date().toLocaleDateString('en-IN', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-
-    // Load orders from localStorage
-    const orders = JSON.parse(localStorage.getItem('sr_orders') || '[]');
-    const emails = JSON.parse(localStorage.getItem('sr_emails') || '[]');
-
-    // Stats
-    document.getElementById('stat-orders').textContent = orders.length;
-    document.getElementById('stat-revenue').textContent = '₹' + orders.reduce((sum, o) => sum + (o.total || 0), 0).toLocaleString('en-IN');
-    document.getElementById('stat-emails').textContent = emails.length;
-    document.getElementById('order-count-badge').textContent = orders.length + ' orders';
-
-    // Product chart
-    const productCounts = {};
     const productNames = [
       'Malabar Pepper Cashews', 'Deccan Lentil Crisps', 'Rajasthani Ker Sangri',
       'Punjabi Mixture', 'Himalayan Seed Mix', 'Vidarbha Chilli Mix',
       'Kerala Banana Chips', 'Onam Rice Snack'
     ];
+    const productPrices = [495, 245, 375, 195, 445, 225, 175, 215];
+    const productRegions = ['Malabar Coast', 'Deccan Plateau', 'Rajasthan', 'Punjab', 'Himalayas', 'Vidarbha', 'Kerala', 'Onam Coast'];
 
-    productNames.forEach(n => productCounts[n] = 0);
-    orders.forEach(order => {
-      (order.items || []).forEach(item => {
-        if (productCounts[item.name] !== undefined) productCounts[item.name]++;
+    function refreshDashboard() {
+      const orders = JSON.parse(localStorage.getItem('sr_orders') || '[]');
+
+      // Time
+      document.getElementById('header-time').textContent = new Date().toLocaleDateString('en-IN', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
       });
-    });
 
-    const maxCount = Math.max(...Object.values(productCounts), 1);
-    const chartContainer = document.getElementById('product-chart');
-    productNames.forEach(name => {
-      const count = productCounts[name];
-      const height = Math.max((count / maxCount) * 150, 8);
-      const short = name.split(' ').slice(0, 2).join(' ');
-      chartContainer.innerHTML += `
-        <div class="chart-bar-item">
-          <span class="chart-bar-value">${count}</span>
-          <div class="chart-bar" style="height: ${height}px"></div>
-          <span class="chart-bar-label">${short}</span>
-        </div>
-      `;
-    });
+      // Stats
+      const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+      document.getElementById('stat-orders').textContent = orders.length;
+      document.getElementById('stat-revenue').textContent = '₹' + totalRevenue.toLocaleString('en-IN');
+      
+      // Count unique emails
+      const uniqueEmails = new Set(orders.map(o => o.customer?.email).filter(Boolean));
+      document.getElementById('stat-emails').textContent = uniqueEmails.size;
+      document.getElementById('order-count-badge').textContent = orders.length + ' orders';
 
-    // Orders table
-    const tableContainer = document.getElementById('orders-table-container');
-    if (orders.length === 0) {
-      tableContainer.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">🛒</div>
-          <p>No orders yet</p>
-          <p class="empty-tip">Place a demo order on the website to see it here.<br>Orders are stored in your browser's localStorage.</p>
-        </div>
-      `;
-    } else {
-      let rows = orders.slice().reverse().map(o => `
-        <tr>
-          <td><span class="order-id">${o.orderId}</span></td>
-          <td>${o.customer?.name || '—'}</td>
-          <td>${(o.items || []).map(i => i.name).join(', ')}</td>
-          <td style="color: var(--gold); font-weight: 700;">₹${o.total || 0}</td>
-          <td><span class="payment-badge">${o.payment || '—'}</span></td>
-          <td><span class="status-badge demo">Demo</span></td>
-          <td style="font-size: 0.75rem; color: var(--text-muted);">${new Date(o.timestamp).toLocaleString('en-IN', {dateStyle: 'short', timeStyle: 'short'})}</td>
-        </tr>
-      `).join('');
+      // Product chart
+      const productCounts = {};
+      productNames.forEach(n => productCounts[n] = 0);
+      orders.forEach(order => {
+        (order.items || []).forEach(item => {
+          if (productCounts[item.name] !== undefined) productCounts[item.name]++;
+        });
+      });
 
-      tableContainer.innerHTML = `
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Order ID</th>
-              <th>Customer</th>
-              <th>Items</th>
-              <th>Total</th>
-              <th>Payment</th>
-              <th>Status</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      `;
+      const maxCount = Math.max(...Object.values(productCounts), 1);
+      const chartContainer = document.getElementById('product-chart');
+      chartContainer.innerHTML = '';
+      productNames.forEach(name => {
+        const count = productCounts[name];
+        const height = Math.max((count / maxCount) * 150, 8);
+        const short = name.split(' ').slice(0, 2).join(' ');
+        chartContainer.innerHTML += `
+          <div class="chart-bar-item">
+            <span class="chart-bar-value">${count}</span>
+            <div class="chart-bar" style="height: ${height}px"></div>
+            <span class="chart-bar-label">${short}</span>
+          </div>
+        `;
+      });
+
+      // Orders table
+      const tableContainer = document.getElementById('orders-table-container');
+      if (orders.length === 0) {
+        tableContainer.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🛒</div>
+            <p>No orders yet</p>
+            <p class="empty-tip">Place a demo order on the <a href="index.html">website</a>, or click <strong>"Load Demo Orders"</strong> above to seed sample data.</p>
+          </div>
+        `;
+      } else {
+        let rows = orders.slice().reverse().map(o => `
+          <tr>
+            <td><span class="order-id">${o.orderId}</span></td>
+            <td>${o.customer?.name || '—'}</td>
+            <td>${(o.items || []).map(i => i.name).join(', ')}</td>
+            <td style="color: var(--gold); font-weight: 700;">₹${o.total || 0}</td>
+            <td><span class="payment-badge">${o.payment || '—'}</span></td>
+            <td><span class="status-badge demo">Demo</span></td>
+            <td style="font-size: 0.75rem; color: var(--text-muted);">${new Date(o.timestamp).toLocaleString('en-IN', {dateStyle: 'short', timeStyle: 'short'})}</td>
+          </tr>
+        `).join('');
+
+        tableContainer.innerHTML = `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      }
+    }
+
+    function seedDemoData() {
+      const demoNames = ['Priya Sharma', 'Rahul Mehta', 'Ananya Iyer', 'Vikram Singh', 'Neha Kapoor', 'Arjun Das', 'Meera Nair'];
+      const demoCities = ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Pune', 'Chennai', 'Jaipur'];
+      const paymentMethods = ['cod', 'upi', 'card'];
+      
+      const existing = JSON.parse(localStorage.getItem('sr_orders') || '[]');
+      
+      for (let i = 0; i < 7; i++) {
+        const numItems = Math.floor(Math.random() * 3) + 1;
+        const itemIndices = [];
+        while (itemIndices.length < numItems) {
+          const idx = Math.floor(Math.random() * 8);
+          if (!itemIndices.includes(idx)) itemIndices.push(idx);
+        }
+        
+        const items = itemIndices.map(idx => ({
+          name: productNames[idx],
+          region: productRegions[idx],
+          price: productPrices[idx]
+        }));
+        
+        const total = items.reduce((s, item) => s + item.price, 0);
+        const daysAgo = Math.floor(Math.random() * 7);
+        const timestamp = new Date(Date.now() - daysAgo * 86400000 - Math.random() * 86400000).toISOString();
+        
+        existing.push({
+          orderId: 'SR-' + (Date.now() + i).toString(36).toUpperCase(),
+          timestamp,
+          items,
+          total,
+          customer: {
+            name: demoNames[i],
+            phone: '98' + Math.floor(Math.random() * 100000000).toString().padStart(8, '0'),
+            email: demoNames[i].split(' ')[0].toLowerCase() + '@gmail.com',
+            address: `${Math.floor(Math.random()*200)+1}, Sector ${Math.floor(Math.random()*30)+1}`,
+            city: demoCities[i],
+            pin: (Math.floor(Math.random()*9)+1).toString() + Math.floor(Math.random()*100000).toString().padStart(5,'0')
+          },
+          payment: paymentMethods[Math.floor(Math.random() * 3)]
+        });
+      }
+      
+      localStorage.setItem('sr_orders', JSON.stringify(existing));
+      refreshDashboard();
+    }
+
+    function clearAllData() {
+      if (confirm('Clear all demo orders? This cannot be undone.')) {
+        localStorage.removeItem('sr_orders');
+        localStorage.removeItem('sr_emails');
+        refreshDashboard();
+      }
     }
 
     function scrollToSection(id) {
       document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
     }
+
+    // Initial render
+    refreshDashboard();
+
+    // Auto-refresh every 3 seconds
+    setInterval(refreshDashboard, 3000);
   </script>
 </body>
 </html>
+

@@ -523,7 +523,10 @@
               <p style="font-size: 0.75rem; color: var(--text-muted);">For orders from other devices, check <a href="https://formspree.io/forms" target="_blank">Formspree Dashboard</a>.</p>
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button onclick="seedDemoData()" style="padding: 8px 16px; background: var(--gold); color: var(--dark); border: none; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">📦 Load Demo Orders</button>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button onclick="seedDemoData(7)" style="padding: 8px 16px; background: var(--gold); color: var(--dark); border: none; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">📦 7 Orders</button>
+              <button onclick="seedDemoData(500)" style="padding: 8px 16px; background: var(--gold); color: var(--dark); border: none; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">📦 500 Orders</button>
+              <button onclick="exportToCSV()" style="padding: 8px 16px; background: var(--green); color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">📥 Export CSV</button>
               <button onclick="clearAllData()" style="padding: 8px 16px; background: transparent; color: var(--red); border: 1px solid var(--red); border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">🗑️ Clear All</button>
             </div>
           </div>
@@ -626,14 +629,19 @@
       }
     }
 
-    function seedDemoData() {
-      const demoNames = ['Priya Sharma', 'Rahul Mehta', 'Ananya Iyer', 'Vikram Singh', 'Neha Kapoor', 'Arjun Das', 'Meera Nair'];
-      const demoCities = ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Pune', 'Chennai', 'Jaipur'];
+    function seedDemoData(count = 7) {
+      const demoNames = [
+        'Priya Sharma', 'Rahul Mehta', 'Ananya Iyer', 'Vikram Singh', 'Neha Kapoor', 
+        'Arjun Das', 'Meera Nair', 'Rohan Desai', 'Kavita Joshi', 'Siddharth Rao',
+        'Aditi Menon', 'Karan Patel', 'Sneha Reddy', 'Rajiv Bhatia', 'Pooja Agarwal',
+        'Varun Verma', 'Isha chongtham', 'Aman Gupta', 'Simran Kaur', 'Tariq Khan'
+      ];
+      const demoCities = ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Pune', 'Chennai', 'Jaipur', 'Kolkata', 'Ahmedabad', 'Chandigarh'];
       const paymentMethods = ['cod', 'upi', 'card'];
       
       const existing = JSON.parse(localStorage.getItem('sr_orders') || '[]');
       
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < count; i++) {
         const numItems = Math.floor(Math.random() * 3) + 1;
         const itemIndices = [];
         while (itemIndices.length < numItems) {
@@ -648,23 +656,27 @@
         }));
         
         const total = items.reduce((s, item) => s + item.price, 0);
-        const daysAgo = Math.floor(Math.random() * 7);
+        const daysAgo = Math.floor(Math.random() * 30); // Spread over 30 days
         const timestamp = new Date(Date.now() - daysAgo * 86400000 - Math.random() * 86400000).toISOString();
         
+        // Pick random person
+        const rndName = demoNames[Math.floor(Math.random() * demoNames.length)];
+        const rndCity = demoCities[Math.floor(Math.random() * demoCities.length)];
+
         existing.push({
-          orderId: 'SR-' + (Date.now() + i).toString(36).toUpperCase(),
+          orderId: 'SR-' + (Date.now() + i).toString(36).toUpperCase() + Math.floor(Math.random() * 1000),
           timestamp,
           items,
           total,
           customer: {
-            name: demoNames[i],
+            name: rndName,
             phone: '98' + Math.floor(Math.random() * 100000000).toString().padStart(8, '0'),
-            email: demoNames[i].split(' ')[0].toLowerCase() + '@gmail.com',
+            email: rndName.split(' ')[0].toLowerCase() + Math.floor(Math.random() * 99) + '@gmail.com',
             address: `${Math.floor(Math.random()*200)+1}, Sector ${Math.floor(Math.random()*30)+1}`,
-            city: demoCities[i],
+            city: rndCity,
             pin: (Math.floor(Math.random()*9)+1).toString() + Math.floor(Math.random()*100000).toString().padStart(5,'0')
           },
-          payment: paymentMethods[Math.floor(Math.random() * 3)]
+          payment: paymentMethods[Math.floor(Math.random() * paymentMethods.length)]
         });
       }
       
@@ -678,6 +690,43 @@
         localStorage.removeItem('sr_emails');
         refreshDashboard();
       }
+    }
+
+    function exportToCSV() {
+      const orders = JSON.parse(localStorage.getItem('sr_orders') || '[]');
+      if (orders.length === 0) {
+        alert('No orders to export!');
+        return;
+      }
+      
+      let csvContent = 'Order ID,Date,Customer Name,Email,Phone,City,Items,Total,Payment\n';
+      
+      orders.forEach(o => {
+        const date = new Date(o.timestamp).toLocaleString('en-IN').replace(/,/g, '');
+        const items = (o.items || []).map(i => i.name).join('; ');
+        
+        const row = [
+          o.orderId,
+          date,
+          `"${o.customer?.name || ''}"`,
+          `"${o.customer?.email || ''}"`,
+          `"${o.customer?.phone || ''}"`,
+          `"${o.customer?.city || ''}"`,
+          `"${items}"`,
+          o.total || 0,
+          o.payment || ''
+        ];
+        csvContent += row.join(',') + '\n';
+      });
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'spiceroute_orders_export.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
     function navTo(id) {

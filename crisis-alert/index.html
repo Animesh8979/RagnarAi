@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crisis Alert Form | Spice Route</title>
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+      background: var(--dark);
+    }
+    .crisis-container {
+      background: var(--dark-card);
+      border: 1px solid rgba(220, 53, 69, 0.4);
+      border-radius: 16px;
+      max-width: 600px;
+      width: 100%;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      position: relative;
+    }
+    .crisis-container::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, #dc3545, #ff4d4f);
+      border-radius: 16px 16px 0 0;
+    }
+    .crisis-header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .crisis-header h1 {
+      font-family: var(--font-display);
+      color: #ff4d4f;
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+    }
+    .crisis-header p {
+      color: var(--text-body);
+      font-size: 0.95rem;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+      color: var(--ivory);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .form-control {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--dark-surface);
+      border: 1px solid rgba(201, 162, 39, 0.15);
+      border-radius: 8px;
+      color: var(--ivory);
+      font-family: var(--font-body);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+    .form-control:focus {
+      border-color: #ff4d4f;
+    }
+    textarea.form-control {
+      resize: vertical;
+      min-height: 120px;
+    }
+    .submit-btn {
+      width: 100%;
+      background: #dc3545;
+      color: white;
+      border: none;
+      padding: 16px;
+      border-radius: 8px;
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: background 0.3s;
+      margin-top: 10px;
+    }
+    .submit-btn:hover {
+      background: #c82333;
+    }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 20px;
+      color: var(--gold);
+      font-size: 0.9rem;
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+    .back-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  
+  <div class="crisis-container">
+    <a href="../index.html" class="back-link">← Back to Website</a>
+    
+    <div class="crisis-header">
+      <h1>Crisis Response Protocol</h1>
+      <p>Your safety is our absolute priority. If you experience an allergic reaction, notice product contamination, or have a severe batch issue, please submit this alert immediately. This goes straight to our safety officers' mobile devices.</p>
+    </div>
+
+    <form id="crisis-form">
+      <div class="form-group">
+        <label for="c-name">Full Name</label>
+        <input type="text" id="c-name" class="form-control" required placeholder="Enter your full name">
+      </div>
+      
+      <div class="form-group">
+        <label for="c-batch">Batch Number / Order ID</label>
+        <input type="text" id="c-batch" class="form-control" required placeholder="e.g., BATCH-402, SR-1234ABCD">
+      </div>
+
+      <div class="form-group">
+        <label for="c-issue">Describe the Issue</label>
+        <textarea id="c-issue" class="form-control" required placeholder="Describe the health reaction or product defect in detail..."></textarea>
+      </div>
+
+      <!-- Update your phone number below. Must include country code, e.g., 91 for India -->
+      <button type="submit" class="submit-btn" data-phone="919999999999">🚨 Send Urgent WhatsApp Alert</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('crisis-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const name = document.getElementById('c-name').value;
+      const batch = document.getElementById('c-batch').value;
+      const issue = document.getElementById('c-issue').value;
+      
+      const btn = document.querySelector('.submit-btn');
+      const waNumber = btn.getAttribute('data-phone');
+      
+      // Format text for WhatsApp
+      let text = `*🚨 URGENT: SPICE ROUTE CRISIS ALERT* 🚨%0A%0A`;
+      text += `*Customer:* ${name}%0A`;
+      text += `*Batch/Order:* ${batch}%0A%0A`;
+      text += `*Issue Reported:*%0A${issue}%0A%0A`;
+      text += `_Please investigate immediately._`;
+      
+      const waLink = `https://wa.me/${waNumber}?text=${text}`;
+      
+      // Redirect to WhatsApp
+      window.open(waLink, '_blank');
+    });
+  </script>
+</body>
+</html>

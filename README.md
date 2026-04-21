@@ -129,6 +129,37 @@ This is a **demo checkout** — no real money is charged. The checkout flow demo
 
 ---
 
+## 🚨 How the Crisis Alert System Works
+
+Designed to demonstrate "Hour 0" incident response times, the Crisis Response Protocol operates entirely outside of normal email queues.
+1. **The Trigger:** A prominent red "🚨 Report a Crisis" link in the footer signals radical transparency.
+2. **The Form:** Located at `crisis-alert/index.html`, customers enter their Full Name, Batch Number, and Issue Description.
+3. **Automated WhatsApp Handoff:** JavaScript instantly formats the report into a structured incident ticket and leverages the `wa.me/` API to route the emergency message directly to the Safety Officer's WhatsApp number (`+91 8979472393`) for immediate intervention.
+
+---
+
+## 🧠 Akkio Predictive Modelling
+
+An external AutoML layer (Akkio) was integrated to predict user conversion probabilities.
+- **Accuracy:** The model achieved a **78.4% predictive accuracy**, establishing a baseline for 'high-intent' customer identification. This proof-of-concept is captured in `akkio_predictor_accuracy_screenshot.png`.
+- **Business Value:** Enables hyper-precise down-funnel targeting to drastically optimize digital ad spend allocation for the brand.
+
+---
+
+## 📝 AIMC Project Methodology (Mission Summary)
+
+The integration of AI tools across 6 distinct missions forms the core of this project:
+1. **Social Media Campaign:** Claude AI prompt sequencing, meticulous cultural curation, and Canva AI creatives.
+2. **Social Listening:** Brand24 tracking, Julius AI sentiment analysis, and comprehensive BuzzSumo benchmarking.
+3. **Crisis Management:** WhatsApp alert prototype, crisis response templates, and strategic counterfactual analysis.
+4. **Customer Analytics:** Claude-synthesized dataset generation and Julius AI-powered RFM segmentation.
+5. **Predictive Modelling:** Expanding CRM to 800 records and training via Akkio (78.4% conversion modeling).
+6. **Website and Chatbot:** Dark-mode architectural deployment (GitHub Pages), SVG interaction mapping, and Tidio knowledge-base configuration.
+
+*(A detailed methodology document mapping out all 6 missions is provided in `AIMC_Project_Submission_Summary.md`).*
+
+---
+
 ## 🗺️ Interactive Features Summary
 
 | Feature | How It Works |
